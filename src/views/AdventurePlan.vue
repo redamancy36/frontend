@@ -49,6 +49,27 @@
         <button @click="goBack" class="btn-back">← 返回目标列表</button>
       </div>
 
+      <!-- 标签页切换 -->
+      <div class="tabs-container">
+        <button 
+          :class="['tab-button', { active: activeTab === 'plan' }]"
+          @click="activeTab = 'plan'"
+        >
+          📋 学习计划
+        </button>
+        <button 
+          :class="['tab-button', { active: activeTab === 'materials' }]"
+          @click="activeTab = 'materials'"
+        >
+          📚 资料库
+        </button>
+      </div>
+
+      <!-- 资料库视图 -->
+      <div v-if="activeTab === 'materials'" class="materials-tab-content">
+        <MaterialPool :goal-id="goalId" />
+      </div>
+
       <!-- 加载状态 -->
       <div v-if="loading" class="loading-container">
         <div class="spinner"></div>
@@ -61,8 +82,8 @@
         <button @click="loadPlan" class="btn-retry">重试</button>
       </div>
 
-      <!-- 冒险地图 -->
-      <div v-else-if="plan" class="adventure-map">
+      <!-- 计划视图 -->
+      <div v-else-if="plan && activeTab === 'plan'" class="adventure-map">
         <!-- 起点 -->
         <div class="start-point">
           <div class="point-icon">🚀</div>
@@ -349,6 +370,7 @@ import UserProfileForm from '@/components/UserProfileForm.vue'
 import ProgressModal from '@/components/ProgressModal.vue'
 import SelfCheckHistoryModal from '@/components/SelfCheckHistoryModal.vue'
 import UserProfileModal from '@/components/UserProfileModal.vue'
+import MaterialPool from '@/components/MaterialPool.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
@@ -377,6 +399,7 @@ const showProfileModal = ref(false)
 const profileModalKey = ref(0) // 用于强制刷新画像模态框
 const completingStages = ref(new Set()) // 正在完成分析的阶段ID集合
 const autoRefreshInterval = ref(null) // 自动刷新定时器
+const activeTab = ref('plan') // 标签页：'plan' 或 'materials'
 
 // 计算属性
 const totalTasks = computed(() => {
@@ -1062,8 +1085,9 @@ function handleLogout() {
 
 .progress-info h2 {
   margin: 0;
-  font-size: 28px;
-  color: #333;
+  font-size: 33px;  /* 从28px增加到33px */
+  color: #1a1a1a;  /* 更深的颜色，提高对比度 */
+  font-weight: 600;  /* 增加字体粗细 */
 }
 
 .progress-stats {
@@ -1594,6 +1618,43 @@ function handleLogout() {
 .score-pill.form {
   background: #e6f0ff;
   color: #3056d6;
+}
+
+/* 标签页样式 */
+.tabs-container {
+  display: flex;
+  gap: 0;
+  margin: 20px 0;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.tab-button {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 19px;  /* 从14px增加到19px */
+  color: #333;  /* 从#666改为#333，提高对比度 */
+  transition: all 0.2s;
+  margin-bottom: -2px;
+  font-weight: 500;  /* 增加字体粗细，提高可读性 */
+}
+
+.tab-button:hover {
+  color: #00CED1;  /* 青色，提高对比度 */
+  background: #f0f0f0;  /* 更明显的背景色 */
+}
+
+.tab-button.active {
+  color: #00CED1;  /* 青色，提高对比度 */
+  border-bottom-color: #00CED1;  /* 与文字颜色一致 */
+  font-weight: 600;  /* 增加激活状态的字体粗细 */
+  background: rgba(0, 206, 209, 0.05);  /* 添加青色背景色，提高可见性 */
+}
+
+.materials-tab-content {
+  margin-top: 20px;
 }
 
 .score-time {
