@@ -118,13 +118,27 @@ async function handleSubmit() {
     })
 
     if (response.ok || response.status === 202) {
+      // 显示成功提示
+      const { toast } = await import('@/utils/toast')
+      toast.success('目标创建成功！正在生成学习计划...', { duration: 3000 })
+      
       closeModal()
       emit('goal-created', response.data)
     } else {
-      error.value = response.data.message || '创建失败'
+      const errorMsg = response.data.message || '创建失败'
+      error.value = errorMsg
+      
+      // 显示错误提示
+      const { toast } = await import('@/utils/toast')
+      toast.error(errorMsg)
     }
   } catch (err) {
-    error.value = err.response?.data?.message || '网络错误，请重试'
+    const errorMsg = err.response?.data?.message || '网络错误，请重试'
+    error.value = errorMsg
+    
+    // 显示错误提示
+    const { toast } = await import('@/utils/toast')
+    toast.error(errorMsg)
   } finally {
     loading.value = false
   }

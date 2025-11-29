@@ -47,6 +47,12 @@
       <!-- 返回按钮 -->
       <div class="back-button">
         <button @click="goBack" class="btn-back">← 返回目标列表</button>
+        <button @click="showFeedbackModal = true" class="btn-feedback">
+          💬 计划反馈
+        </button>
+        <button @click="showPlanHistoryModal = true" class="btn-history">
+          📜 修改历史
+        </button>
       </div>
 
       <!-- 标签页切换 -->
@@ -67,7 +73,7 @@
 
       <!-- 资料库视图 -->
       <div v-if="activeTab === 'materials'" class="materials-tab-content">
-        <MaterialPool :goal-id="goalId" />
+        <MaterialPool ref="materialPoolRef" :goal-id="goalId" />
       </div>
 
       <!-- 加载状态 -->
@@ -264,8 +270,18 @@
                           </div>
                         </div>
                         <div class="task-actions">
+                          <!-- 资料上传任务：显示标记完成按钮 -->
                           <button
-                            v-if="isFormTask(task) && isTaskUnlocked(task, node, nodeIndex, taskIndex)"
+                            v-if="isMaterialUploadTask(task) && isTaskUnlocked(task, node, nodeIndex, taskIndex)"
+                            @click.stop="markMaterialUploadTaskComplete(task)"
+                            class="btn-task-action"
+                            :class="{ 'completed': isTaskCompleted(task) }"
+                            :disabled="isTaskCompleted(task)"
+                          >
+                            {{ isTaskCompleted(task) ? '已完成' : '标记任务完成' }}
+                          </button>
+                          <button
+                            v-else-if="isFormTask(task) && isTaskUnlocked(task, node, nodeIndex, taskIndex)"
                             @click.stop="startSelfCheck(task)"
                             class="btn-task-action"
                             :class="{ 'completed': isTaskCompleted(task) }"
@@ -348,16 +364,24 @@
       @close="showProfileModal = false"
     />
 
-    <div class="toast-container" v-if="toasts.length">
-      <div
-        v-for="toast in toasts"
-        :key="toast.id"
-        class="toast-item"
-        :class="toast.type"
-      >
-        {{ toast.message }}
-      </div>
-    </div>
+    <!-- 计划反馈模态框 -->
+    <PlanFeedbackModal
+      v-if="goalId && goalId > 0"
+      :show="showFeedbackModal"
+      :goal-id="goalId"
+      :plan-stages="plan?.stages || []"
+      @close="showFeedbackModal = false"
+      @submitted="handleFeedbackSubmitted"
+    />
+
+    <!-- 计划修改历史模态框 -->
+    <PlanHistoryModal
+      v-if="goalId && goalId > 0"
+      :show="showPlanHistoryModal"
+      :goal-id="goalId"
+      @close="showPlanHistoryModal = false"
+    />
+
   </div>
 </template>
 
@@ -371,8 +395,12 @@ import ProgressModal from '@/components/ProgressModal.vue'
 import SelfCheckHistoryModal from '@/components/SelfCheckHistoryModal.vue'
 import UserProfileModal from '@/components/UserProfileModal.vue'
 import MaterialPool from '@/components/MaterialPool.vue'
+import PlanFeedbackModal from '@/components/PlanFeedbackModal.vue'
+import PlanHistoryModal from '@/components/PlanHistoryModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+
+const materialPoolRef = ref(null)  // 用于访问MaterialPool组件的方法
 
 const route = useRoute()
 const router = useRouter()
@@ -391,12 +419,13 @@ const expandedNodes = ref(new Set())
 const showSelfCheck = ref(false)
 const selectedTaskId = ref(null)
 const infoUpdates = ref([])
-const toasts = ref([])
-const showHistoryModal = ref(false)
+const showHistoryModal = ref(false) // 自检历史模态框
 const historyTaskId = ref(null)
 const historyTaskTitle = ref('')
 const showProfileModal = ref(false)
 const profileModalKey = ref(0) // 用于强制刷新画像模态框
+const showFeedbackModal = ref(false) // 反馈模态框显示状态
+const showPlanHistoryModal = ref(false) // 计划修改历史模态框显示状态
 const completingStages = ref(new Set()) // 正在完成分析的阶段ID集合
 const autoRefreshInterval = ref(null) // 自动刷新定时器
 const activeTab = ref('plan') // 标签页：'plan' 或 'materials'
@@ -645,6 +674,11 @@ function isFormTask(task) {
   return task?.task_type === 'form'
 }
 
+function isMaterialUploadTask(task) {
+  // 判断是否是资料上传任务
+  return task.title && task.title.includes('备考资料上传与整理任务')
+}
+
 function getNodeProgress(node) {
   if (!node.tasks) return 0
   return node.tasks.filter(task => isTaskCompleted(task)).length
@@ -882,6 +916,19 @@ function getNodeTypeLabel(nodeType) {
 }
 
 function handleTaskClick(task) {
+  // 检查是否是资料上传任务
+  if (task.title && task.title.includes('备考资料上传与整理任务')) {
+    // 跳转到资料库标签页
+    activeTab.value = 'materials'
+    // 等待DOM更新后打开上传模态框
+    setTimeout(() => {
+      if (materialPoolRef.value && typeof materialPoolRef.value.openUploadModal === 'function') {
+        materialPoolRef.value.openUploadModal()
+      }
+    }, 100)
+    return
+  }
+  
   // 找到任务所在的节点和索引
   let taskIndex = -1
   let parentNode = null
@@ -964,6 +1011,29 @@ function closeHistoryModal() {
   showHistoryModal.value = false
 }
 
+async function markMaterialUploadTaskComplete(task) {
+  if (!task || !task.id) {
+    showToast('无法识别任务，请重试', 'error')
+    return
+  }
+  
+  try {
+    const response = await api.post(`/goals/${goalId.value}/tasks/${task.id}/mark-complete`)
+    
+    if (response.status === 200 || response.data) {
+      showToast('任务已标记为完成', 'success')
+      // 重新加载计划以更新任务状态
+      await loadPlan()
+    } else {
+      showToast(response.data?.error || '标记失败，请重试', 'error')
+    }
+  } catch (error) {
+    console.error('标记任务完成失败:', error)
+    const errorMsg = error.response?.data?.error || error.response?.data?.message || '网络错误，请重试'
+    showToast(errorMsg, 'error')
+  }
+}
+
 async function loadUpdates() {
   if (!goalId.value) {
     infoUpdates.value = []
@@ -998,15 +1068,18 @@ function formatDate(value) {
   }
 }
 
-function showToast(message, type = 'info') {
-  const id = Date.now() + Math.random()
-  toasts.value.push({ id, message, type })
-  setTimeout(() => {
-    const index = toasts.value.findIndex(item => item.id === id)
-    if (index >= 0) {
-      toasts.value.splice(index, 1)
-    }
-  }, 4500)
+// 使用统一的Toast组件
+async function showToast(message, type = 'info') {
+  const { toast } = await import('@/utils/toast')
+  if (type === 'success') {
+    toast.success(message)
+  } else if (type === 'error') {
+    toast.error(message)
+  } else if (type === 'warning') {
+    toast.warning(message)
+  } else {
+    toast.info(message)
+  }
 }
 
 async function handleProfileSubmitted(data) {
@@ -1039,6 +1112,13 @@ const showProgressModal = ref(false)
 
 function goBack() {
   router.push('/')
+}
+
+function handleFeedbackSubmitted(feedbackData) {
+  // 反馈提交成功后的处理
+  console.log('[AdventurePlan] 反馈已提交:', feedbackData)
+  // 可以刷新计划或显示提示
+  loadUpdates()
 }
 
 function switchToCalendar() {
@@ -1143,6 +1223,9 @@ function handleLogout() {
 /* 返回按钮 */
 .back-button {
   margin-bottom: 24px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .btn-back {
@@ -1159,6 +1242,42 @@ function handleLogout() {
 .btn-back:hover {
   background: white;
   transform: translateX(-4px);
+}
+
+.btn-feedback {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.btn-feedback:hover {
+  background: linear-gradient(135deg, #5568d3 0%, #654391 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-history {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.btn-history:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 /* 加载和错误状态 */

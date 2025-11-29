@@ -234,6 +234,16 @@ export default {
           await this.uploadSingleFile(file, i)
         }
         
+        // 显示成功提示
+        const { toast } = await import('@/utils/toast')
+        const fileCount = this.selectedFiles.length
+        toast.success(
+          fileCount === 1 
+            ? '文件上传成功' 
+            : `成功上传 ${fileCount} 个文件`,
+          { duration: 3000 }
+        )
+        
         this.$emit('uploaded')
         this.$emit('close')
         this.selectedFiles = []
@@ -250,7 +260,10 @@ export default {
         } else {
           errorMessage = error.message || '上传失败'
         }
-        alert(errorMessage)
+        
+        // 显示错误提示
+        const { toast } = await import('@/utils/toast')
+        toast.error(errorMessage, { duration: 4000 })
       } finally {
         this.uploading = false
         this.uploadProgress = 0

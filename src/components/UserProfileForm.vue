@@ -274,27 +274,42 @@ async function submitForm() {
       const regenerating = response.data.regenerating !== undefined ? response.data.regenerating : true
       console.log('[UserProfileForm] 提交成功，regenerating:', regenerating)
       
+      // 显示成功提示
+      const { toast } = await import('@/utils/toast')
+      toast.success('用户画像已成功更新')
+      
       emit('submitted', {
         nodeId: props.nodeId,
         profileData: formData.value,
         regenerating: regenerating
       })
     } else {
-      error.value = response.data?.message || '提交失败，请重试'
+      const errorMsg = response.data?.message || '提交失败，请重试'
+      error.value = errorMsg
+      
+      // 显示错误提示
+      const { toast } = await import('@/utils/toast')
+      toast.error(errorMsg)
     }
   } catch (err) {
     console.error('提交用户画像失败:', err)
     // 更详细的错误信息
+    let errorMsg = '网络错误，请重试'
     if (err.response) {
       // 服务器返回了错误响应
-      error.value = err.response.data?.message || `服务器错误: ${err.response.status} ${err.response.statusText}`
+      errorMsg = err.response.data?.message || err.response.data?.error || `服务器错误: ${err.response.status} ${err.response.statusText}`
     } else if (err.request) {
       // 请求已发出但没有收到响应
-      error.value = '网络错误：无法连接到服务器，请检查网络连接'
+      errorMsg = '网络错误：无法连接到服务器，请检查网络连接'
     } else {
       // 其他错误
-      error.value = err.message || '未知错误，请重试'
+      errorMsg = err.message || '未知错误，请重试'
     }
+    error.value = errorMsg
+    
+    // 显示错误提示
+    const { toast } = await import('@/utils/toast')
+    toast.error(errorMsg)
   } finally {
     submitting.value = false
   }

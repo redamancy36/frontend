@@ -76,6 +76,15 @@
       :goal-id="goalId"
       @close="previewMaterial = null"
     />
+    
+    <!-- 编辑模态框 -->
+    <MaterialEditModal
+      v-if="showEditModal && editingMaterial"
+      :material="editingMaterial"
+      :goal-id="goalId"
+      @close="handleEditClose"
+      @updated="handleMaterialUpdated"
+    />
   </div>
 </template>
 
@@ -84,13 +93,15 @@ import { getMaterials, deleteMaterial } from '@/services/materialApi'
 import MaterialCard from './MaterialCard.vue'
 import MaterialUploadModal from './MaterialUploadModal.vue'
 import MaterialPreviewModal from './MaterialPreviewModal.vue'
+import MaterialEditModal from './MaterialEditModal.vue'
 
 export default {
   name: 'MaterialPool',
   components: {
     MaterialCard,
     MaterialUploadModal,
-    MaterialPreviewModal
+    MaterialPreviewModal,
+    MaterialEditModal
   },
   props: {
     goalId: {
@@ -104,6 +115,8 @@ export default {
       loading: false,
       showUploadModal: false,
       previewMaterial: null,
+      showEditModal: false,
+      editingMaterial: null,
       searchQuery: '',
       selectedCategory: '',
       selectedSubject: ''
@@ -141,6 +154,10 @@ export default {
       this.showUploadModal = false
       this.loadMaterials()
     },
+    // 暴露给父组件的方法：打开上传模态框
+    openUploadModal() {
+      this.showUploadModal = true
+    },
     handlePreview(material) {
       this.previewMaterial = material
     },
@@ -151,18 +168,46 @@ export default {
       
       try {
         await deleteMaterial(this.goalId, material.id)
+        
+        // 显示成功提示
+        const { toast } = await import('@/utils/toast')
+        toast.success('资料已成功删除')
+        
         this.loadMaterials()
       } catch (error) {
         console.error('删除资料失败:', error)
-        alert(error.response?.data?.error || '删除失败')
+        const errorMessage = error.response?.data?.error || '删除失败'
+        
+        // 显示错误提示
+        const { toast } = await import('@/utils/toast')
+        toast.error(errorMessage)
       }
     },
     handleDownload(material) {
       // MaterialCard组件内部处理下载
     },
     handleEdit(material) {
-      // TODO: 打开编辑模态框
-      console.log('编辑资料:', material)
+      this.editingMaterial = material
+      this.showEditModal = true
+    },
+    handleEditClose() {
+      this.showEditModal = false
+      this.editingMaterial = null
+    },
+    handleMaterialUpdated(updatedMaterial) {
+      // 更新列表中的资料信息
+      const index = this.materials.findIndex(m => m.id === updatedMaterial.id)
+      if (index !== -1) {
+        this.materials[index] = updatedMaterial
+      }
+      
+      // 如果当前预览的资料被更新，也更新previewMaterial
+      if (this.previewMaterial && this.previewMaterial.id === updatedMaterial.id) {
+        this.previewMaterial = updatedMaterial
+      }
+      
+      // 关闭编辑模态框
+      this.handleEditClose()
     }
   }
 }

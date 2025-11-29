@@ -123,14 +123,26 @@ async function handleDelete(goalId, goalTitle) {
   try {
     const response = await api.delete(`/goals/${goalId}`)
     if (response.ok) {
+      // 显示成功提示
+      const { toast } = await import('@/utils/toast')
+      toast.success('目标已成功删除')
+      
       emit('delete-goal', goalId)
       emit('refresh')
     } else {
-      alert(response.data.message || '删除失败')
+      const errorMsg = response.data.message || '删除失败'
+      
+      // 显示错误提示
+      const { toast } = await import('@/utils/toast')
+      toast.error(errorMsg)
     }
   } catch (error) {
     console.error('删除目标失败:', error)
-    alert('网络错误，请重试')
+    const errorMsg = error.response?.data?.message || '网络错误，请重试'
+    
+    // 显示错误提示
+    const { toast } = await import('@/utils/toast')
+    toast.error(errorMsg)
   }
 }
 </script>

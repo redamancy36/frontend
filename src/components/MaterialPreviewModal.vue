@@ -169,16 +169,24 @@ export default {
         const response = await updateMaterialMeta(this.goalId, this.material.id)
         
         if (response.data && response.data.message) {
-          alert(response.data.message)
+          // 显示成功提示
+          const { toast } = await import('@/utils/toast')
+          toast.success(response.data.message)
+          
           // 重新加载预览URL
           this.previewUrl = null
           await this.loadPreviewUrl()
         } else {
-          alert('修复失败，请重试')
+          const { toast } = await import('@/utils/toast')
+          toast.error('修复失败，请重试')
         }
       } catch (error) {
         console.error('修复预览失败:', error)
-        alert(error.response?.data?.error || '修复失败，请检查网络连接')
+        const errorMessage = error.response?.data?.error || '修复失败，请检查网络连接'
+        
+        // 显示错误提示
+        const { toast } = await import('@/utils/toast')
+        toast.error(errorMessage)
       } finally {
         this.loading = false
       }
@@ -214,9 +222,17 @@ export default {
         setTimeout(() => {
           document.body.removeChild(link)
         }, 100)
+        
+        // 显示成功提示
+        const { toast } = await import('@/utils/toast')
+        toast.success('文件下载已开始', { duration: 2000 })
       } catch (error) {
         console.error('获取下载链接失败:', error)
-        alert(error.response?.data?.error || '下载失败')
+        const errorMessage = error.response?.data?.error || '下载失败'
+        
+        // 显示错误提示
+        const { toast } = await import('@/utils/toast')
+        toast.error(errorMessage)
       }
     },
     async openInNewTab() {
