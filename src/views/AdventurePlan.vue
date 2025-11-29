@@ -73,7 +73,7 @@
 
       <!-- 资料库视图 -->
       <div v-if="activeTab === 'materials'" class="materials-tab-content">
-        <MaterialPool ref="materialPoolRef" :goal-id="goalId" />
+        <MaterialPool ref="materialPoolRef" :goal-id="goalId" @uploaded="handleMaterialUploaded" />
       </div>
 
       <!-- 加载状态 -->
@@ -235,7 +235,8 @@
                         :class="{
                           'locked': !isTaskUnlocked(task, node, nodeIndex, taskIndex),
                           'completed': isTaskCompleted(task),
-                          'active': isTaskActive(task)
+                          'active': isTaskActive(task),
+                          'material-upload-task': isMaterialUploadTask(task) && !isTaskCompleted(task)
                         }"
                         @click="handleTaskClick(task)"
                       >
@@ -382,6 +383,12 @@
       @close="showPlanHistoryModal = false"
     />
 
+    <!-- 资料上传提示模态框 -->
+    <MaterialUploadTipModal
+      :show="showMaterialUploadTip"
+      @close="handleCloseMaterialUploadTip"
+    />
+
   </div>
 </template>
 
@@ -397,6 +404,7 @@ import UserProfileModal from '@/components/UserProfileModal.vue'
 import MaterialPool from '@/components/MaterialPool.vue'
 import PlanFeedbackModal from '@/components/PlanFeedbackModal.vue'
 import PlanHistoryModal from '@/components/PlanHistoryModal.vue'
+import MaterialUploadTipModal from '@/components/MaterialUploadTipModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
@@ -426,6 +434,7 @@ const showProfileModal = ref(false)
 const profileModalKey = ref(0) // 用于强制刷新画像模态框
 const showFeedbackModal = ref(false) // 反馈模态框显示状态
 const showPlanHistoryModal = ref(false) // 计划修改历史模态框显示状态
+const showMaterialUploadTip = ref(false) // 资料上传提示模态框显示状态
 const completingStages = ref(new Set()) // 正在完成分析的阶段ID集合
 const autoRefreshInterval = ref(null) // 自动刷新定时器
 const activeTab = ref('plan') // 标签页：'plan' 或 'materials'
@@ -918,14 +927,15 @@ function getNodeTypeLabel(nodeType) {
 function handleTaskClick(task) {
   // 检查是否是资料上传任务
   if (task.title && task.title.includes('备考资料上传与整理任务')) {
-    // 跳转到资料库标签页
-    activeTab.value = 'materials'
-    // 等待DOM更新后打开上传模态框
-    setTimeout(() => {
-      if (materialPoolRef.value && typeof materialPoolRef.value.openUploadModal === 'function') {
-        materialPoolRef.value.openUploadModal()
-      }
-    }, 100)
+    // 检查是否需要显示提示（如果用户之前选择了"不再显示"，则不再显示）
+    const tipHidden = localStorage.getItem('material_upload_tip_hidden')
+    if (!tipHidden) {
+      // 显示提示弹窗
+      showMaterialUploadTip.value = true
+    } else {
+      // 直接打开上传模态框
+      openMaterialUploadModal()
+    }
     return
   }
   
@@ -1034,6 +1044,48 @@ async function markMaterialUploadTaskComplete(task) {
   }
 }
 
+// 打开资料上传模态框
+function openMaterialUploadModal() {
+  // 跳转到资料库标签页
+  activeTab.value = 'materials'
+  // 等待DOM更新后打开上传模态框
+  setTimeout(() => {
+    if (materialPoolRef.value && typeof materialPoolRef.value.openUploadModal === 'function') {
+      materialPoolRef.value.openUploadModal()
+    }
+  }, 100)
+}
+
+// 关闭资料上传提示弹窗
+function handleCloseMaterialUploadTip() {
+  showMaterialUploadTip.value = false
+  // 关闭提示后自动打开上传模态框
+  openMaterialUploadModal()
+}
+
+// 处理资料上传成功事件
+async function handleMaterialUploaded() {
+  if (!plan.value || !plan.value.stages) {
+    return
+  }
+  
+  // 查找未完成的材料上传任务
+  for (const stage of plan.value.stages || []) {
+    for (const node of stage.nodes || []) {
+      if (node.tasks) {
+        for (const task of node.tasks) {
+          // 检查是否是材料上传任务且未完成
+          if (isMaterialUploadTask(task) && !isTaskCompleted(task)) {
+            // 自动标记为完成
+            await markMaterialUploadTaskComplete(task)
+            return // 只标记第一个找到的未完成任务
+          }
+        }
+      }
+    }
+  }
+}
+
 async function loadUpdates() {
   if (!goalId.value) {
     infoUpdates.value = []
@@ -1079,7 +1131,7 @@ async function showToast(message, type = 'info') {
     toast.warning(message)
   } else {
     toast.info(message)
-  }
+    }
 }
 
 async function handleProfileSubmitted(data) {
@@ -1670,6 +1722,56 @@ function handleLogout() {
   border-left-color: #667eea;
   background: #f0f2ff;
   animation: pulse 2s infinite;
+}
+
+/* 资料上传任务特殊高亮样式 */
+.task-card.material-upload-task {
+  border: 2px solid #ff9800;
+  border-left-width: 6px;
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+  position: relative;
+  animation: highlightPulse 2s infinite;
+}
+
+.task-card.material-upload-task::before {
+  content: '⭐';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 20px;
+  background: #ff9800;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.4);
+  animation: bounce 1.5s infinite;
+}
+
+.task-card.material-upload-task:hover {
+  transform: translateX(4px) translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 152, 0, 0.4);
+}
+
+@keyframes highlightPulse {
+  0%, 100% { 
+    box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+  }
+  50% { 
+    box-shadow: 0 6px 20px rgba(255, 152, 0, 0.5);
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 @keyframes pulse {

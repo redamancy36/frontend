@@ -153,6 +153,8 @@ export default {
     handleMaterialUploaded() {
       this.showUploadModal = false
       this.loadMaterials()
+      // 通知父组件上传成功
+      this.$emit('uploaded')
     },
     // 暴露给父组件的方法：打开上传模态框
     openUploadModal() {
