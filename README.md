@@ -25,14 +25,31 @@ BettaFish Frontend 是 BettaFish 智能目标管理系统的前端模块，采�
 - **KaTeX** - 数学公式渲染
 - **OGL** - WebGL 库
 
-## 📦 安装
+## 📦 快速开始
 
-### 环境要求
+### 1. 克隆项目
 
+```bash
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+cd YOUR_REPO_NAME
+```
+
+**注意**：将 `YOUR_USERNAME` 和 `YOUR_REPO_NAME` 替换为实际的仓库地址。
+
+### 2. 环境要求
+
+确保您的系统已安装：
 - **Node.js**: 16.0 或更高版本
-- **npm**: 8.0 或更高版本（或使用 yarn/pnpm）
+  - 下载地址：https://nodejs.org/
+  - 验证安装：`node --version`
+- **npm**: 8.0 或更高版本（Node.js 自带）
+  - 验证安装：`npm --version`
 
-### 安装依赖
+**可选**：也可以使用 yarn 或 pnpm：
+- Yarn: https://yarnpkg.com/
+- pnpm: https://pnpm.io/
+
+### 3. 安装依赖
 
 ```bash
 npm install
@@ -50,7 +67,32 @@ yarn install
 pnpm install
 ```
 
-## 🚀 开发
+**注意**：首次安装可能需要几分钟时间，取决于网络速度。
+
+### 4. 启动开发服务器
+
+```bash
+npm run dev
+```
+
+启动成功后，打开浏览器访问：**http://localhost:5173**
+
+### 5. 配置后端 API（如果需要）
+
+如果您的后端 API 不在 `http://localhost:5000`，需要修改 `vite.config.js` 中的代理配置：
+
+```javascript
+server: {
+  proxy: {
+    '/api': {
+      target: 'http://your-backend-url:port',  // 修改这里
+      changeOrigin: true
+    }
+  }
+}
+```
+
+## 🚀 开发指南
 
 ### 启动开发服务器
 
@@ -59,6 +101,17 @@ npm run dev
 ```
 
 开发服务器将在 `http://localhost:5173` 启动。
+
+**访问地址**：
+- 本地访问：http://localhost:5173
+- 局域网访问：http://YOUR_IP:5173（其他设备可以通过此地址访问）
+
+### 开发环境特性
+
+- ✅ **热模块替换 (HMR)**：修改代码后自动刷新
+- ✅ **API 代理**：开发环境下自动将 `/api` 请求代理到后端
+- ✅ **源码映射**：方便调试，可在浏览器中查看原始代码
+- ✅ **错误提示**：清晰的错误信息和堆栈跟踪
 
 ### API 代理配置
 
@@ -135,18 +188,82 @@ frontend/
 
 ### 环境变量
 
-创建 `.env.local` 文件来配置环境变量：
+如果需要配置环境变量，可以在项目根目录创建 `.env.local` 文件：
 
 ```env
+# 后端 API 基础 URL（可选，默认使用 vite.config.js 中的代理配置）
 VITE_API_BASE_URL=http://localhost:5000
 ```
 
+**注意**：`.env.local` 文件不会被提交到 Git（已在 .gitignore 中忽略）。
+
 ### Vite 配置
 
-主要配置项（`vite.config.js`）：
-- **开发服务器端口**: 5173
-- **API 代理**: `/api` -> `http://localhost:5000`
-- **构建输出目录**: `dist/`
+主要配置项位于 `vite.config.js`：
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| **开发服务器端口** | 本地开发服务器端口 | 5173 |
+| **API 代理** | 开发环境 API 代理地址 | `/api` -> `http://localhost:5000` |
+| **构建输出目录** | 生产构建输出目录 | `dist/` |
+| **路径别名** | `@` 指向 `src` 目录 | 已配置 |
+
+## ❓ 常见问题
+
+### 1. 安装依赖失败
+
+**问题**：`npm install` 失败或很慢
+
+**解决方案**：
+- 使用国内镜像源：
+  ```bash
+  npm config set registry https://registry.npmmirror.com
+  ```
+- 或使用 cnpm：
+  ```bash
+  npm install -g cnpm --registry=https://registry.npmmirror.com
+  cnpm install
+  ```
+
+### 2. 端口被占用
+
+**问题**：`Error: Port 5173 is already in use`
+
+**解决方案**：
+- 修改 `vite.config.js` 中的端口：
+  ```javascript
+  server: {
+    port: 5174,  // 改为其他端口
+  }
+  ```
+- 或关闭占用 5173 端口的程序
+
+### 3. 无法连接到后端 API
+
+**问题**：API 请求失败，显示网络错误
+
+**解决方案**：
+- 确认后端服务已启动
+- 检查 `vite.config.js` 中的代理配置是否正确
+- 检查后端服务地址和端口是否正确
+
+### 4. 页面显示空白
+
+**问题**：打开页面后显示空白
+
+**解决方案**：
+- 打开浏览器开发者工具（F12）查看控制台错误
+- 检查是否有 JavaScript 错误
+- 确认所有依赖都已正确安装：`npm install`
+
+### 5. 样式不生效
+
+**问题**：页面样式显示异常
+
+**解决方案**：
+- 清除浏览器缓存
+- 重启开发服务器：`Ctrl+C` 停止，然后 `npm run dev` 重新启动
+- 检查 `src/style.css` 是否正确导入
 
 ## 🤝 贡献
 
@@ -163,7 +280,38 @@ VITE_API_BASE_URL=http://localhost:5000
 - [Vue Router 文档](https://router.vuejs.org/)
 - [Pinia 文档](https://pinia.vuejs.org/)
 
-## 📞 联系方式
+## 📚 更多文档
 
-如有问题或建议，请通过 Issue 反馈。
+- [快速开始指南](./GETTING_STARTED.md) - 详细的安装和使用步骤
+- [GitHub 上传指南](./FRONTEND_GITHUB_GUIDE.md) - 如何将项目上传到 GitHub
+
+## 📞 获取帮助
+
+### 遇到问题？
+
+1. **查看文档**：先查看 [快速开始指南](./GETTING_STARTED.md) 和本 README
+2. **搜索 Issues**：在 GitHub Issues 中搜索是否有相同问题
+3. **提交 Issue**：如果问题仍未解决，请提交新的 Issue，包含：
+   - 问题描述
+   - 复现步骤
+   - 错误信息截图
+   - 环境信息（Node.js 版本、操作系统等）
+
+### 贡献代码
+
+欢迎贡献代码！请遵循以下步骤：
+
+1. Fork 本项目
+2. 创建特性分支：`git checkout -b feature/your-feature-name`
+3. 提交更改：`git commit -m 'Add some feature'`
+4. 推送到分支：`git push origin feature/your-feature-name`
+5. 提交 Pull Request
+
+## 📄 许可证
+
+本项目采用与原项目相同的许可证。
+
+---
+
+**祝您使用愉快！** 🎉
 
