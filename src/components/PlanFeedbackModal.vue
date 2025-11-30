@@ -30,27 +30,25 @@
             </select>
           </div>
           
-          <!-- 难度系数滑动条（仅在选择“难度问题”时显示） -->
-          <div v-if="formData.feedback_type === 'difficulty'" class="form-group difficulty-slider-group">
-            <label for="difficulty_score">
-              期望难度系数（0-100）
+          <!-- 难度系数选择（仅在选择"难度问题"时显示） -->
+          <div v-if="formData.feedback_type === 'difficulty'" class="form-group difficulty-select-group">
+            <label>
+              期望难度系数
               <span class="required">*</span>
             </label>
-            <div class="difficulty-slider-row">
-              <input
-                id="difficulty_score"
-                type="range"
-                min="0"
-                max="100"
-                v-model.number="formData.difficulty_score"
-                class="difficulty-slider"
-              />
-              <span class="difficulty-value">
-                {{ formData.difficulty_score }}
-              </span>
+            <div class="difficulty-options">
+              <button
+                v-for="option in difficultyOptions"
+                :key="option.value"
+                type="button"
+                :class="['difficulty-option', { active: formData.difficulty_score === option.value }]"
+                @click="formData.difficulty_score = option.value"
+              >
+                {{ option.label }}
+              </button>
             </div>
             <small class="form-hint">
-              0 表示非常简单，100 表示非常困难。当前值表示你<strong>期望的计划难度水平</strong>，默认 25。
+              当前选择：<strong>{{ getDifficultyLabel(formData.difficulty_score) }}</strong>（{{ formData.difficulty_score }}分）
             </small>
           </div>
           
@@ -146,12 +144,21 @@ export default {
         feedback_type: '',
         target_stage: '',
         target_task_id: null,
-        difficulty_score: 25,
+        difficulty_score: 50, // 默认中等（50分对应原70分）
         feedback_text: '',
         suggestions: ''
       },
       submitting: false,
-      error: null
+      error: null,
+      // 难度选项（对应新的难度映射）
+      difficultyOptions: [
+        { label: '超简单', value: 10, range: '0-20' },
+        { label: '简单', value: 30, range: '21-40' },
+        { label: '中等', value: 50, range: '41-60' },
+        { label: '困难', value: 68, range: '61-75' },
+        { label: '非常难', value: 83, range: '76-90' },
+        { label: '超难', value: 95, range: '91-100' }
+      ]
     }
   },
   computed: {
@@ -167,7 +174,7 @@ export default {
           feedback_type: '',
           target_stage: '',
           target_task_id: null,
-          difficulty_score: 25,
+          difficulty_score: 50, // 默认中等（50分对应原70分）
           feedback_text: '',
           suggestions: ''
         }
@@ -223,6 +230,10 @@ export default {
       } finally {
         this.submitting = false
       }
+    },
+    getDifficultyLabel(score) {
+      const option = this.difficultyOptions.find(opt => opt.value === score)
+      return option ? option.label : '未选择'
     }
   }
 }
@@ -320,25 +331,53 @@ export default {
   margin-bottom: 20px;
 }
 
-.difficulty-slider-group {
+.difficulty-select-group {
   margin-top: 4px;
 }
 
-.difficulty-slider-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.difficulty-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 8px;
 }
 
-.difficulty-slider {
-  flex: 1;
+@media (max-width: 600px) {
+  .difficulty-options {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
-.difficulty-value {
-  min-width: 40px;
-  text-align: right;
-  font-weight: 600;
+.difficulty-option {
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
   color: #333;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+}
+
+.difficulty-option:hover {
+  border-color: #667eea;
+  background: #f5f3ff;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.difficulty-option.active {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.difficulty-option.active:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
 }
 
 .form-group label {

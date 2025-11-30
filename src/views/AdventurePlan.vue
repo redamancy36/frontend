@@ -113,7 +113,13 @@
                 <span class="stage-number">阶段 {{ stage.order_index || stageIndex + 1 }}</span>
                 <h3 class="stage-title">{{ stage.name }}</h3>
                 <span class="stage-progress">
-                  {{ getStageProgress(stage) }}/{{ getStageTotalTasks(stage) }} 完成
+                  <span v-if="isStageGenerating(stage)" class="generating-indicator">
+                    <span class="spinner-small"></span>
+                    正在生成任务...
+                  </span>
+                  <span v-else>
+                    {{ getStageProgress(stage) }}/{{ getStageTotalTasks(stage) }} 完成
+                  </span>
                 </span>
               </div>
               <div class="stage-actions">
@@ -490,15 +496,14 @@ onMounted(() => {
   goalId.value = parsedId
   loadPlan()
   
-  // 启动自动刷新：每30秒检查一次是否有新任务生成
-  // 如果检测到有阶段正在生成任务（completingStages不为空），则每10秒刷新一次
+  // 启动智能自动刷新：只在检测到阶段正在生成时才刷新，且使用静默刷新
   autoRefreshInterval.value = setInterval(() => {
-    // 如果页面可见且有阶段正在生成，则刷新
+    // 如果页面可见且有阶段正在生成，则静默刷新（不显示loading）
     if (!document.hidden && completingStages.value.size > 0) {
-      loadPlan()
+      silentRefreshPlan() // 使用静默刷新，不显示loading状态
       loadUpdates()
     }
-  }, 10000) // 10秒刷新一次（当有阶段正在生成时）
+  }, 15000) // 改为15秒刷新一次，减少刷新频率
 })
 
 onUnmounted(() => {
@@ -510,14 +515,16 @@ onUnmounted(() => {
 })
 
 // 方法
-async function loadPlan() {
+async function loadPlan(showLoading = true) {
   if (!goalId.value || goalId.value <= 0) {
     error.value = '无效的目标ID'
     loading.value = false
     return
   }
   
-  loading.value = true
+  if (showLoading) {
+    loading.value = true
+  }
   error.value = ''
   
   try {
@@ -545,6 +552,9 @@ async function loadPlan() {
       }
 
       await loadUpdates()
+      
+      // 更新阶段生成状态
+      updateStageGenerationStatus()
       
       // 检查阶段1是否完成但任务状态可能不正确，自动修复
       const stage1 = plan.value.stages?.find(s => (s.order_index || 0) === 1)
@@ -600,8 +610,117 @@ async function loadPlan() {
       error.value = err.message || '加载失败，请重试'
     }
   } finally {
-    loading.value = false
+    if (showLoading) {
+      loading.value = false
+    }
   }
+}
+
+// 静默刷新：不显示loading状态，只更新数据
+async function silentRefreshPlan() {
+  if (!goalId.value || goalId.value <= 0) {
+    return
+  }
+  
+  try {
+    const planResponse = await api.get(`/goals/${goalId.value}/plan`)
+    
+    if (planResponse.data) {
+      // 检查是否有实际变化，避免不必要的UI更新
+      const newPlan = planResponse.data
+      const hasChanges = checkPlanChanges(plan.value, newPlan)
+      
+      if (hasChanges) {
+        plan.value = newPlan
+        
+        // 从计划数据中获取目标标题
+        if (plan.value.global_context) {
+          const context = typeof plan.value.global_context === 'string' 
+            ? JSON.parse(plan.value.global_context) 
+            : plan.value.global_context
+          goalTitle.value = context.target_school || context.goal_title || plan.value.title || '冒险之旅'
+        } else {
+          goalTitle.value = plan.value.title || '冒险之旅'
+        }
+        
+        // 检查阶段生成状态
+        updateStageGenerationStatus()
+      }
+    }
+  } catch (err) {
+    // 静默刷新失败时不显示错误，避免干扰用户
+    console.warn('静默刷新计划失败:', err)
+  }
+}
+
+// 检查计划是否有变化
+function checkPlanChanges(oldPlan, newPlan) {
+  if (!oldPlan || !newPlan) return true
+  
+  // 检查阶段数量
+  if ((oldPlan.stages?.length || 0) !== (newPlan.stages?.length || 0)) {
+    return true
+  }
+  
+  // 检查每个阶段的任务数量
+  for (let i = 0; i < (newPlan.stages?.length || 0); i++) {
+    const oldStage = oldPlan.stages?.[i]
+    const newStage = newPlan.stages?.[i]
+    
+    if (!oldStage || !newStage) return true
+    
+    // 检查节点数量
+    if ((oldStage.nodes?.length || 0) !== (newStage.nodes?.length || 0)) {
+      return true
+    }
+    
+    // 检查每个节点的任务数量
+    for (let j = 0; j < (newStage.nodes?.length || 0); j++) {
+      const oldNode = oldStage.nodes?.[j]
+      const newNode = newStage.nodes?.[j]
+      
+      if (!oldNode || !newNode) return true
+      
+      const oldTaskCount = oldNode.tasks?.length || 0
+      const newTaskCount = newNode.tasks?.length || 0
+      
+      if (oldTaskCount !== newTaskCount) {
+        return true
+      }
+    }
+  }
+  
+  return false
+}
+
+// 更新阶段生成状态
+function updateStageGenerationStatus() {
+  if (!plan.value || !plan.value.stages) return
+  
+  // 检查哪些阶段正在生成（有阶段但任务数为0）
+  const generatingStages = new Set()
+  
+  plan.value.stages.forEach(stage => {
+    const stageId = stage.id || stage.order_index
+    const hasTasks = stage.nodes?.some(node => (node.tasks?.length || 0) > 0)
+    const stageOrder = stage.order_index || 0
+    
+    // 如果阶段2-5没有任务，且不是阶段1，可能正在生成
+    if (stageOrder > 1 && !hasTasks) {
+      // 检查上一阶段是否已完成
+      const prevStage = plan.value.stages.find(s => (s.order_index || 0) === stageOrder - 1)
+      if (prevStage) {
+        const prevProgress = getStageProgress(prevStage)
+        const prevTotal = getStageTotalTasks(prevStage)
+        // 如果上一阶段已完成，当前阶段可能正在生成
+        if (prevTotal > 0 && prevProgress === prevTotal) {
+          generatingStages.add(stageId)
+        }
+      }
+    }
+  })
+  
+  completingStages.value = generatingStages
 }
 
 function toggleStage(stageId) {
@@ -796,6 +915,26 @@ function isStageAnalyzing(stage) {
   return completingStages.value.has(stageId)
 }
 
+// 检查阶段是否正在生成任务（有阶段但任务数为0，且上一阶段已完成）
+function isStageGenerating(stage) {
+  const stageOrder = stage.order_index || 0
+  if (stageOrder <= 1) return false // 阶段1不会生成
+  
+  const hasTasks = stage.nodes?.some(node => (node.tasks?.length || 0) > 0)
+  if (hasTasks) return false // 已有任务，不在生成中
+  
+  // 检查上一阶段是否已完成
+  if (!plan.value || !plan.value.stages) return false
+  const prevStage = plan.value.stages.find(s => (s.order_index || 0) === stageOrder - 1)
+  if (!prevStage) return false
+  
+  const prevProgress = getStageProgress(prevStage)
+  const prevTotal = getStageTotalTasks(prevStage)
+  
+  // 如果上一阶段已完成，当前阶段可能正在生成
+  return prevTotal > 0 && prevProgress === prevTotal
+}
+
 async function completeStage(stage) {
   const stageId = stage.id || stage.order_index
   const stageOrderIndex = stage.order_index || stageId
@@ -832,7 +971,7 @@ async function completeStage(stage) {
         
         const checkInterval = setInterval(async () => {
           if (!document.hidden) {
-            await loadPlan()
+            await silentRefreshPlan() // 使用静默刷新，不显示loading
             await loadUpdates()
             
             // 检查下一阶段是否已有任务，如果有则停止频繁刷新
@@ -850,10 +989,10 @@ async function completeStage(stage) {
                     // 所有阶段都已完成，恢复默认刷新
                     autoRefreshInterval.value = setInterval(() => {
                       if (!document.hidden && completingStages.value.size > 0) {
-                        loadPlan()
+                        silentRefreshPlan() // 使用静默刷新
                         loadUpdates()
                       }
-                    }, 10000)
+                    }, 15000) // 改为15秒，减少刷新频率
                   } else {
                     // 还有其他阶段在生成，继续使用当前刷新频率
                     autoRefreshInterval.value = checkInterval
@@ -864,7 +1003,7 @@ async function completeStage(stage) {
               }
             }
           }
-        }, 5000) // 每5秒刷新一次
+        }, 12000) // 改为12秒刷新一次，减少刷新频率和页面闪烁
         
         autoRefreshInterval.value = checkInterval
       }
@@ -1523,6 +1662,20 @@ function handleLogout() {
   font-size: 12px;
   opacity: 0.8;
   margin-left: 4px;
+}
+
+.generating-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #ff9800;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.generating-indicator .spinner-small {
+  border: 2px solid rgba(255, 152, 0, 0.3);
+  border-top-color: #ff9800;
 }
 
 .spinner-small {
